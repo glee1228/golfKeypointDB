@@ -78,7 +78,7 @@ class SimpleHRNet:
         self.yolo_model_def = os.path.join(self.detector_root,"yolo/config/yolov3.cfg")
         self.yolo_class_path = os.path.join(self.detector_root,"yolo/data/coco.names")
         self.yolo_weights_path = os.path.join(self.detector_root,"yolo/weights/yolov3.weights")
-        self.faster_RCNN_weights_path = os.path.join(self.detector_root,"FasterRCNN/checkpoints/obstacleV2/model-90000.pth")
+        self.faster_RCNN_weights_path = os.path.join("/mldisk/nfs_shared_/dh/golfKeypointDB/weights/faster_rcnn_obstacleV2.pth")
         self.device = device
         self.previous_out_shape = None
 
