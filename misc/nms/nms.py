@@ -10,7 +10,7 @@ from __future__ import print_function
 
 import numpy as np
 import sys
-sys.path.append('/home/mmlab/CCTV_Server/misc/nms')
+sys.path.append('/workspace/misc/nms')
 from cpu_nms import cpu_nms
 from gpu_nms import gpu_nms
 

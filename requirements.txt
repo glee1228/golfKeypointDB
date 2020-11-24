@@ -10,3 +10,5 @@ tensorboard==1.11
 tensorboardX==1.4
 torchsummary==1.5.1
 torch_optimizer
+json_tricks
+pycocotools
