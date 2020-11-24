@@ -18,7 +18,7 @@
 
 3. `docker-compose up -d`
 
-4.  or multi-person support: FasterRCNN
+4.  multi-person support: Faster R-CNN
 
     1. Install FasterRCNN required packages (Included in above requirements.txt)
 
@@ -52,7 +52,13 @@
 
         [potterhsu/easy-faster-rcnn.pytorch](https://github.com/potterhsu/easy-faster-rcnn.pytorch)
 
-5. Train  `main.py`
+5. If you want to run the training script on COCO `main.py`, you have to build the `nms` module first.
+    Please note that a linux machine with CUDA is currently required. Build it with either:
+    
+    - `cd misc; make` 
+    
+6. Train  `main.py`
+
     ```bash
     #/workspace
     python main.py 

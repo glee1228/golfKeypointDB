@@ -2,9 +2,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from datasets.HumanPoseEstimation import HumanPoseEstimationDataset
+from Dataset import HumanPoseEstimationDataset
 from misc.utils import flip_tensor, flip_back, get_final_preds
-from misc.visualization import save_images
 
 import os
 from datetime import datetime
@@ -16,7 +15,6 @@ from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
 
-from datasets.HumanPoseEstimation import HumanPoseEstimationDataset
 from utils import JointsMSELoss, JointsOHKMMSELoss
 from misc.checkpoint import save_checkpoint, load_checkpoint
 from misc.utils import flip_tensor, flip_back
