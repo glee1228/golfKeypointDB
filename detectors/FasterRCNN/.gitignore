@@ -1,0 +1,15 @@
+frames/
+frames_output/
+frames_json/
+obstacle/
+obstacleV2/
+
+.idea/
+__pycache__/
+
+build
+caches
+support.egg-info
+pycocotools
+
+*.so
