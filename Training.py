@@ -477,7 +477,7 @@ class GOLFTrain(Train):
             device (torch.device): device to be used (default: cuda, if available).
                 Default: None
         """
-        super(COCOTrain, self).__init__(
+        super(GOLFTrain, self).__init__(
             exp_name=exp_name,
             ds_train=ds_train,
             ds_val=ds_val,

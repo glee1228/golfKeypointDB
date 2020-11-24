@@ -96,7 +96,7 @@ class GOLFDataset(HumanPoseEstimationDataset):
             soft_nms (bool): enable soft non-maximum suppression.
                 Default: False
         """
-        super(COCODataset, self).__init__()
+        super(GOLFDataset, self).__init__()
 
         self.root_path = root_path
         self.data_version = data_version
@@ -618,7 +618,7 @@ class GOLFDataset(HumanPoseEstimationDataset):
 
 
 if __name__ == '__main__':
-    coco = COCODataset(rotate_prob=0., half_body_prob=0.)
+    coco = GOLFDataset(rotate_prob=0., half_body_prob=0.)
     item = coco.__getitem__(0)
     print('ok!!')
     # img = np.clip(np.transpose(item[0].numpy(), (1, 2, 0))[:, :, ::-1] * np.asarray([0.229, 0.224, 0.225]) +

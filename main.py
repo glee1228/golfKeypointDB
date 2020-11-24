@@ -139,7 +139,7 @@ if __name__ == '__main__':
     parser.add_argument("--nesterov", help="enable nesterov", action="store_true")
     parser.add_argument("--pretrained_weight_path", "-p",
                         help="pre-trained weight path. Weights will be loaded before training starts.",
-                        type=str, default="/home/mmlab/CCTV_Server/weights/pose_hrnet_w48_384x288.pth")
+                        type=str, default="/mldisk/nfs_shared_/dh/golfKeypointDB/weights/pose_hrnet_w48_384x288.pth")
     parser.add_argument("--checkpoint_path", "-c",
                         help="previous checkpoint path. Checkpoint will be loaded before training starts. It includes "
                              "the model, the optimizer, the epoch, and other parameters.",
