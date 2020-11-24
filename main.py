@@ -71,7 +71,7 @@ def main(exp_name,
     print("\nLoading train and validation datasets...")
 
     # load train and val datasets
-    ds_train = COCODataset(
+    ds_train = GOLFDataset(
         root_path=coco_root_path, data_version="train", is_train=True, use_gt_bboxes=True, bbox_path="",
         image_width=image_resolution[1], image_height=image_resolution[0], color_rgb=True, flip_prob=0.,rotate_prob=0.,half_body_prob=0.
     )
@@ -84,12 +84,12 @@ def main(exp_name,
     #              use_different_joints_weight=False, heatmap_sigma=3, soft_nms=False,
     #              ):
 
-    ds_val = COCODataset(
+    ds_val = GOLFDataset(
         root_path=coco_root_path, data_version="val", is_train=False, use_gt_bboxes=(coco_bbox_path is None),
         bbox_path=coco_bbox_path, image_width=image_resolution[1], image_height=image_resolution[0], color_rgb=True,
     )
 
-    train = COCOTrain(
+    train = GOLFTrain(
         exp_name=exp_name,
         ds_train=ds_train,
         ds_val=ds_val,
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_bn_momentum", help="HRNet bn_momentum parameter", type=float, default=0.1)
     parser.add_argument("--disable_flip_test_images", help="disable image flip during evaluation", action="store_true")
     parser.add_argument("--image_resolution", "-r", help="image resolution", type=str, default='(384, 288)')
-    parser.add_argument("--coco_root_path", help="COCO dataset root path", type=str, default="/home/mmlab/CCTV_Server/datasets/golfDB_18pts_200_test")
+    parser.add_argument("--coco_root_path", help="COCO dataset root path", type=str, default="/workspace/data/golfKeypointDB_200")
     parser.add_argument("--coco_bbox_path", help="path of detected bboxes to use during evaluation",
                         type=str, default=None)
     parser.add_argument("--seed", "-s", help="seed", type=int, default=1)
