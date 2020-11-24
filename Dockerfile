@@ -15,6 +15,7 @@ ADD . .
 ENV PYTHONPATH $PYTHONPATH:/workspace
 
 RUN pip install -r requirements.txt
+RUN apt-get update 
 RUN apt-get install -y ffmpeg
 
 RUN chmod -R a+w /workspace
