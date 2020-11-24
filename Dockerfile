@@ -15,7 +15,7 @@ ADD . .
 ENV PYTHONPATH $PYTHONPATH:/workspace
 
 RUN pip install -r requirements.txt
-RUN apt-get install -y libsm6 libxext6 libxrender-dev ffmpeg
+RUN apt-get install -y ffmpeg
 
 RUN chmod -R a+w /workspace
 RUN /bin/bash
