@@ -44,7 +44,7 @@ class GOLFDataset(HumanPoseEstimationDataset):
     """
 
     def __init__(self,
-                 root_path="/home/mmlab/CCTV_Server/datasets/golfDB_18pts_200", data_version="train", is_train=True, use_gt_bboxes=True, bbox_path="",
+                 root_path="/mldisk/nfs_shared_/dh/golfKeypointDB/data/golfKeypointDB", data_version="train", is_train=True, use_gt_bboxes=True, bbox_path="",
                  image_width=288, image_height=384, color_rgb=True,
                  scale=True, scale_factor=0.35, flip_prob=0.5, rotate_prob=0.5, rotation_factor=45., half_body_prob=0.3,
                  use_different_joints_weight=False, heatmap_sigma=3, soft_nms=False,
@@ -357,9 +357,9 @@ class GOLFDataset(HumanPoseEstimationDataset):
 
         res_folder = os.path.join(output_dir, 'results')
         if not os.path.exists(res_folder):
-            os.makedirs(res_folder, 0o755, exist_ok=True)
+            os.makedirs(res_folder)
 
-        res_file = os.path.join(res_folder, 'golf_keypoints_{}_results_{}.json'.format(self.data_version, rank))
+        res_file = os.path.join(res_folder, f'golf_keypoints_{self.data_version}_results_{int(rank*100)}.json')
 
         # person x (keypoints)
         _kpts = []

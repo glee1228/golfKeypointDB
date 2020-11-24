@@ -66,18 +66,16 @@ class SimpleHRNet:
 
         self.c = c
         self.nof_joints = nof_joints
-        self.detector_root = '/home/mmlab/CCTV_Server/models/detectors'
+        self.detector_root = '/workspace/detectors'
         self.checkpoint_path = checkpoint_path
         self.model_name = model_name
         self.resolution = resolution  # in the form (height, width) as in the original implementation
         self.interpolation = interpolation
         self.return_bounding_boxes = return_bounding_boxes
         self.max_batch_size = max_batch_size
-        self.tiny_yolo_model_def = os.path.join(self.detector_root,"yolo/config/yolov3-tiny.cfg")
-        self.tiny_yolo_weights_path= os.path.join(self.detector_root,"yolo/weights/yolov3-tiny.weights")
-        self.yolo_model_def = os.path.join(self.detector_root,"yolo/config/yolov3.cfg")
-        self.yolo_class_path = os.path.join(self.detector_root,"yolo/data/coco.names")
-        self.yolo_weights_path = os.path.join(self.detector_root,"yolo/weights/yolov3.weights")
+        # self.yolo_model_def = os.path.join(self.detector_root,"yolo/config/yolov3.cfg")
+        # self.yolo_class_path = os.path.join(self.detector_root,"yolo/data/coco.names")
+        # self.yolo_weights_path = os.path.join(self.detector_root,"yolo/weights/yolov3.weights")
         self.faster_RCNN_weights_path = os.path.join("/mldisk/nfs_shared_/dh/golfKeypointDB/weights/faster_rcnn_obstacleV2.pth")
         self.device = device
         self.previous_out_shape = None
