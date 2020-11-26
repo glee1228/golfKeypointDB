@@ -8,8 +8,10 @@ from collections import defaultdict
 import cv2
 import json_tricks as json
 import numpy as np
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
+# from pycocotools.coco import COCO
+# from pycocotools.cocoeval import COCOeval
+from cocoeval import COCOeval
+from coco import COCO
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -115,16 +117,12 @@ class GOLFDataset(HumanPoseEstimationDataset):
         self.use_different_joints_weight = use_different_joints_weight  # ToDo Check
         self.heatmap_sigma = heatmap_sigma
         self.soft_nms = soft_nms
-
+        self.annotation_dir =  os.path.join(self.root_path, 'annotations')
         self.data_path = os.path.join(self.root_path, self.data_version)
         if self.data_version == 'train':
-            self.annotation_path = os.path.join(
-                self.root_path, 'annotations', 'golfDB_18pts_train_200_2_conf50.json'
-            )
+            self.annotation_path = os.path.join(self.annotation_dir, 'golfDB_18pts_train_200_2_conf50.json')
         elif self.data_version =='val':
-            self.annotation_path = os.path.join(
-                self.root_path, 'annotations', 'golfDB_18pts_val_20.json'
-            )
+            self.annotation_path = os.path.join(self.annotation_dir, 'golfDB_18pts_val_20.json')
 
         self.image_size = (self.image_width, self.image_height)
         self.aspect_ratio = self.image_width * 1.0 / self.image_height
@@ -251,7 +249,7 @@ class GOLFDataset(HumanPoseEstimationDataset):
                 })
 
         # Done check if we need prepare_data -> We should not
-        print('\nCOCO dataset loaded!')
+        # print('\nCOCO dataset loaded!')
 
         # Default values
         self.bbox_thre = 1.0
@@ -580,6 +578,7 @@ class GOLFDataset(HumanPoseEstimationDataset):
             _key_points = np.array([img_kpts[k]['keypoints'] for k in range(len(img_kpts))], dtype=np.float32)
             key_points = np.zeros((_key_points.shape[0], self.nof_joints * 3), dtype=np.float32)
 
+
             for ipt in range(self.nof_joints):
                 key_points[:, ipt * 3 + 0] = _key_points[:, ipt, 0]
                 key_points[:, ipt * 3 + 1] = _key_points[:, ipt, 1]
@@ -603,7 +602,10 @@ class GOLFDataset(HumanPoseEstimationDataset):
     def _do_python_keypoint_eval(self, res_file):
         coco_dt = self.coco.loadRes(res_file)
         coco_eval = COCOeval(self.coco, coco_dt, 'keypoints')
+
         coco_eval.params.useSegm = None
+        coco_eval.params.imgIds = self.coco.getImgIds()
+        # import pdb;pdb.set_trace()
         coco_eval.evaluate()
         coco_eval.accumulate()
         coco_eval.summarize()

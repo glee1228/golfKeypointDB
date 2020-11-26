@@ -10,17 +10,47 @@ from datetime import datetime
 
 import tensorboardX as tb
 import torch
+from torch import nn
 from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
 
-from utils import JointsMSELoss, JointsOHKMMSELoss
+from utils import JointsMSELoss, JointsOHKMMSELoss, AverageMeter
 from misc.checkpoint import save_checkpoint, load_checkpoint
 from misc.utils import flip_tensor, flip_back
 from misc.visualization import save_images
 from models import HRNet
+import logging
+import warnings
+warnings.filterwarnings("ignore")
 
+def init_logger(save_dir, comment=None):
+    c_date, c_time = datetime.now().strftime("%Y%m%d/%H%M%S").split('/')
+    if comment is not None:
+        if os.path.exists(os.path.join(save_dir, c_date, comment)):
+            comment += f'_{c_time}'
+    else:
+        comment = c_time
+    log_dir = os.path.join(save_dir, c_date, comment)
+    log_txt = os.path.join(log_dir, 'log.txt')
+
+    os.makedirs(f'{log_dir}/ckpts')
+    os.makedirs(f'{log_dir}/submissions')
+
+    global logger
+    logger = logging.getLogger(c_time)
+
+    logger.setLevel(logging.INFO)
+    logger = logging.getLogger(c_time)
+
+    fmt = logging.Formatter("[%(asctime)s] %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+    h_file = logging.FileHandler(filename=log_txt, mode='a')
+    h_file.setFormatter(fmt)
+    h_file.setLevel(logging.INFO)
+    logger.addHandler(h_file)
+    logger.info(f'Log directory ... {log_txt}')
+    return log_dir
 
 class Train(object):
     """
@@ -53,7 +83,7 @@ class Train(object):
                  log_path='./logs',
                  use_tensorboard=True,
                  model_c=48,
-                 model_nof_joints=17,
+                 model_nof_joints=18,
                  model_bn_momentum=0.1,
                  flip_test_images=True,
                  device=None
@@ -139,16 +169,6 @@ class Train(object):
         self.flip_test_images = flip_test_images
         self.epoch = 0
 
-        # torch device
-        if device is not None:
-            self.device = device
-        else:
-            if torch.cuda.is_available():
-                self.device = torch.device('cuda:0')
-            else:
-                self.device = torch.device('cpu')
-
-        print(self.device)
 
         os.makedirs(self.log_path, 0o755, exist_ok=True)  # exist_ok=False to avoid overwriting
         if self.use_tensorboard:
@@ -166,14 +186,15 @@ class Train(object):
         #
         # load model
         self.model = HRNet(c=self.model_c, nof_joints=self.model_nof_joints,
-                           bn_momentum=self.model_bn_momentum).to(self.device)
+                           bn_momentum=self.model_bn_momentum).cuda()
+
 
         #
         # define loss and optimizers
         if self.loss == 'JointsMSELoss':
-            self.loss_fn = JointsMSELoss().to(self.device)
+            self.loss_fn = JointsMSELoss()
         elif self.loss == 'JointsOHKMMSELoss':
-            self.loss_fn = JointsOHKMMSELoss().to(self.device)
+            self.loss_fn = JointsOHKMMSELoss()
         else:
             raise NotImplementedError
 
@@ -189,7 +210,7 @@ class Train(object):
         # load pre-trained weights (such as those pre-trained on imagenet)
         if self.pretrained_weight_path is not None:
             if self.model_nof_joints == 18:
-                pretrained_dict = torch.load(self.pretrained_weight_path, map_location=self.device)
+                pretrained_dict = torch.load(self.pretrained_weight_path)
                 pretrained_dict_items = list(pretrained_dict.items())
                 pretrained_model = {}
                 j = 0
@@ -198,10 +219,10 @@ class Train(object):
                     k = pretrained_dict_items[j][0]
 
                     if k == 'final_layer.weight':
-                        x = torch.rand(1,48,1,1).to(self.device)
+                        x = torch.rand(1,48,1,1).cuda()
                         v = torch.cat([v, x], dim=0)
                     if k == 'final_layer.bias':
-                        x = torch.rand(1).to(self.device)
+                        x = torch.rand(1).cuda()
                         v = torch.cat([v,x],dim=0)
                     pretrained_model[k] = v
                     j +=1
@@ -209,9 +230,11 @@ class Train(object):
                 model_dict.update(pretrained_model)
                 self.model.load_state_dict(model_dict,strict=True)
             else:
-                self.model.load_state_dict(torch.load(self.pretrained_weight_path, map_location=self.device), strict=True)
+                self.model.load_state_dict(torch.load(self.pretrained_weight_path, strict=True))
             print('Pre-trained weights loaded.')
 
+        self.model = nn.DataParallel(self.model.cuda())
+        # self.model = nn.DataParallel(self.model.to(self.device))
         #
         # load previous checkpoint
         if self.checkpoint_path is not None:
@@ -255,9 +278,9 @@ class Train(object):
         self.model.train()
 
         for step, (image, target, target_weight, joints_data) in enumerate(tqdm(self.dl_train, desc='Training')):
-            image = image.to(self.device)
-            target = target.to(self.device)
-            target_weight = target_weight.to(self.device)
+            image = image.cuda()
+            target = target.cuda()
+            target_weight = target_weight.cuda()
 
             self.optim.zero_grad()
 
@@ -294,9 +317,9 @@ class Train(object):
 
         with torch.no_grad():
             for step, (image, target, target_weight, joints_data) in enumerate(tqdm(self.dl_val, desc='Validating')):
-                image = image.to(self.device)
-                target = target.to(self.device)
-                target_weight = target_weight.to(self.device)
+                image = image.cuda()
+                target = target.cuda()
+                target_weight = target_weight.cuda()
 
                 output = self.model(image)
 
@@ -339,17 +362,17 @@ class Train(object):
 
         if self.best_loss is None or self.best_loss > self.mean_loss_val:
             self.best_loss = self.mean_loss_val
-            print('best_loss %f at epoch %d' % (self.best_loss, self.epoch + 1))
+            # print('best_loss %f at epoch %d' % (self.best_loss, self.epoch + 1))
             save_checkpoint(path=os.path.join(self.log_path, 'checkpoint_best_loss.pth'), epoch=self.epoch + 1,
                             model=self.model, optimizer=self.optim, params=self.parameters)
         if self.best_acc is None or self.best_acc < self.mean_acc_val:
             self.best_acc = self.mean_acc_val
-            print('best_acc %f at epoch %d' % (self.best_acc, self.epoch + 1))
+            # print('best_acc %f at epoch %d' % (self.best_acc, self.epoch + 1))
             save_checkpoint(path=os.path.join(self.log_path, 'checkpoint_best_acc.pth'), epoch=self.epoch + 1,
                             model=self.model, optimizer=self.optim, params=self.parameters)
         if self.best_mAP is None or self.best_mAP < self.mean_mAP_val:
             self.best_mAP = self.mean_mAP_val
-            print('best_mAP %f at epoch %d' % (self.best_mAP, self.epoch + 1))
+            # print('best_mAP %f at epoch %d' % (self.best_mAP, self.epoch + 1))
             save_checkpoint(path=os.path.join(self.log_path, 'checkpoint_best_mAP.pth'), epoch=self.epoch + 1,
                             model=self.model, optimizer=self.optim, params=self.parameters)
 
@@ -362,7 +385,7 @@ class Train(object):
 
         # start training
         for self.epoch in range(self.starting_epoch, self.epochs):
-            print('\nEpoch %d of %d @ %s' % (self.epoch + 1, self.epochs, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            # print('\nEpoch %d of %d @ %s' % (self.epoch + 1, self.epochs, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
             self.mean_loss_train = 0.
             self.mean_loss_val = 0.
@@ -513,10 +536,13 @@ class GOLFTrain(Train):
         idx = 0
 
         self.model.train()
-        for step, (image, target, target_weight, joints_data) in enumerate(tqdm(self.dl_train, desc='Training')):
-            image = image.to(self.device)
-            target = target.to(self.device)
-            target_weight = target_weight.to(self.device)
+        losses = AverageMeter()
+        avg_accs = AverageMeter()
+        pbar = tqdm(self.dl_train, ncols=170)
+        for step, (image, target, target_weight, joints_data) in enumerate(self.dl_train):
+            image = image.cuda()
+            target = target.cuda()
+            target_weight = target_weight.cuda()
 
             self.optim.zero_grad()
 
@@ -533,6 +559,8 @@ class GOLFTrain(Train):
             accs, avg_acc, cnt, joints_preds, joints_target = \
                 self.ds_train.evaluate_accuracy(output, target)
 
+            losses.update(loss)
+            avg_accs.update(avg_acc)
             # Original
             num_images = image.shape[0]
 
@@ -556,11 +584,18 @@ class GOLFTrain(Train):
 
             idx += num_images
 
+            log = f'[Epoch {self.epoch}] '
+            log += f'Train loss : {loss.item():.4f}({losses.avg:.4f}) '
+            log += f'Train acc : {avg_acc.item():.4f}({avg_accs.avg:.4f}) '
+
+            pbar.set_description(log)
+            pbar.update()
+
             self.mean_loss_train += loss.item()
             if self.use_tensorboard:
-                self.summary_writer.add_scalar('train_loss', loss.item(),
+                self.summary_writer.add_scalar('Train/Loss', loss.item(),
                                                global_step=step + self.epoch * self.len_dl_train)
-                self.summary_writer.add_scalar('train_acc', avg_acc.item(),
+                self.summary_writer.add_scalar('Train/Accuracy', avg_acc.item(),
                                                global_step=step + self.epoch * self.len_dl_train)
                 if step == 0:
                     save_images(image, target, joints_target, output, joints_preds, joints_data['joints_visibility'],
@@ -569,10 +604,44 @@ class GOLFTrain(Train):
         self.mean_loss_train /= len(self.dl_train)
 
         # COCO evaluation
-        print('\nTrain AP/AR')
+        # print('\nTrain AP/AR')
         self.train_accs, self.mean_mAP_train = self.ds_train.evaluate_overall_accuracy(
             all_preds, all_boxes, image_paths, output_dir=self.log_path)
 
+
+        mean_mAP = self.train_accs['AP'] #  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ]
+        AP_5 = self.train_accs['Ap .5'] # Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ]
+        AP_75 = self.train_accs['AP .75'] # Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ]
+        mean_mAR = self.train_accs['AR']  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.378
+        AR_5 = self.train_accs['AR .5'] # Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ]
+        AR_75 = self.train_accs['AR .75'] # Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ]
+
+        _lr = self.optim.param_groups[0]['lr']
+        log = f'[EPOCH {self.epoch}] Train Loss : {losses.avg:.4f}, '
+        log += f'Train acc : {avg_accs.avg:.4f}, '
+        log += f'AP : {mean_mAP:.4f}, '
+        log += f'AP.5 : {AP_5:.4f}, '
+        log += f'AP.75 : {AP_75:.4f}, '
+        log += f'AR : {mean_mAR:.4f}, '
+        log += f'LR : {_lr:.2e}'
+        pbar.set_description(log)
+        pbar.close()
+
+        if self.use_tensorboard:
+            self.summary_writer.add_scalar('Train/mean_mAP', mean_mAP,
+                                           global_step=step + self.epoch * self.len_dl_train)
+            self.summary_writer.add_scalar('Train/AP.5', AP_5,
+                                           global_step=step + self.epoch * self.len_dl_train)
+            self.summary_writer.add_scalar('Train/AP.75', AP_75,
+                                           global_step=step + self.epoch * self.len_dl_train)
+            self.summary_writer.add_scalar('Train/mean_mAR', mean_mAR,
+                                           global_step=step + self.epoch * self.len_dl_train)
+            self.summary_writer.add_scalar('Train/AR.5', AR_5,
+                                           global_step=step + self.epoch * self.len_dl_train)
+            self.summary_writer.add_scalar('Train/AR.75', AR_75,
+                                           global_step=step + self.epoch * self.len_dl_train)
+
+    @torch.no_grad()
     def _val(self):
         num_samples = len(self.ds_val)
 
@@ -581,68 +650,111 @@ class GOLFTrain(Train):
         image_paths = []
         idx = 0
         self.model.eval()
-        with torch.no_grad():
-            for step, (image, target, target_weight, joints_data) in enumerate(tqdm(self.dl_val, desc='Validating')):
-                image = image.to(self.device)
-                target = target.to(self.device)
-                target_weight = target_weight.to(self.device)
+        losses = AverageMeter()
+        avg_accs = AverageMeter()
+        pbar = tqdm(self.dl_val, ncols=170)
 
-                output = self.model(image)
+        for step, (image, target, target_weight, joints_data) in enumerate(self.dl_val):
+            image = image.cuda()
+            target = target.cuda()
+            target_weight = target_weight.cuda()
 
-                if self.flip_test_images:
-                    image_flipped = flip_tensor(image, dim=-1)
-                    output_flipped = self.model(image_flipped)
+            output = self.model(image)
 
-                    output_flipped = flip_back(output_flipped, self.ds_val.flip_pairs)
+            if self.flip_test_images:
+                image_flipped = flip_tensor(image, dim=-1)
+                output_flipped = self.model(image_flipped)
 
-                    output = (output + output_flipped) * 0.5
+                output_flipped = flip_back(output_flipped, self.ds_val.flip_pairs)
 
-                loss = self.loss_fn(output, target, target_weight)
+                output = (output + output_flipped) * 0.5
 
-                # Evaluate accuracy
-                # Get predictions on the resized images (given as input)
-                accs, avg_acc, cnt, joints_preds, joints_target = \
-                    self.ds_train.evaluate_accuracy(output, target)
+            loss = self.loss_fn(output, target, target_weight)
 
-                # Original
-                num_images = image.shape[0]
+            # Evaluate accuracy
+            # Get predictions on the resized images (given as input)
+            accs, avg_acc, cnt, joints_preds, joints_target = \
+                self.ds_train.evaluate_accuracy(output, target)
 
-                # measure elapsed time
-                c = joints_data['center'].numpy()
-                s = joints_data['scale'].numpy()
-                score = joints_data['score'].numpy()
-                pixel_std = 200  # ToDo Parametrize this
+            losses.update(loss)
+            avg_accs.update(avg_acc)
 
-                preds, maxvals = get_final_preds(True, output, c, s,
-                                                 pixel_std)  # ToDo check what post_processing exactly does
+            # Original
+            num_images = image.shape[0]
 
-                all_preds[idx:idx + num_images, :, 0:2] = preds[:, :, 0:2].detach().cpu().numpy()
-                all_preds[idx:idx + num_images, :, 2:3] = maxvals.detach().cpu().numpy()
-                # double check this all_boxes parts
-                all_boxes[idx:idx + num_images, 0:2] = c[:, 0:2]
-                all_boxes[idx:idx + num_images, 2:4] = s[:, 0:2]
-                all_boxes[idx:idx + num_images, 4] = np.prod(s * pixel_std, 1)
-                all_boxes[idx:idx + num_images, 5] = score
-                image_paths.extend(joints_data['imgPath'])
+            log = f'[Epoch {self.epoch}] '
+            log += f'Valid loss : {loss.item():.4f}({losses.avg:.4f}) '
+            log += f'Valid acc : {avg_acc.item():.4f}({avg_accs.avg:.4f}) '
+            pbar.set_description(log)
+            pbar.update()
 
-                idx += num_images
+            # measure elapsed time
+            c = joints_data['center'].numpy()
+            s = joints_data['scale'].numpy()
+            score = joints_data['score'].numpy()
+            pixel_std = 200  # ToDo Parametrize this
 
-                self.mean_loss_val += loss.item()
-                self.mean_acc_val += avg_acc.item()
-                if self.use_tensorboard:
-                    self.summary_writer.add_scalar('val_loss', loss.item(),
-                                                   global_step=step + self.epoch * self.len_dl_val)
-                    self.summary_writer.add_scalar('val_acc', avg_acc.item(),
-                                                   global_step=step + self.epoch * self.len_dl_val)
-                    if step == 0:
-                        save_images(image, target, joints_target, output, joints_preds,
-                                    joints_data['joints_visibility'], self.summary_writer,
-                                    step=step + self.epoch * self.len_dl_train, prefix='test_')
+            preds, maxvals = get_final_preds(True, output, c, s,
+                                             pixel_std)  # ToDo check what post_processing exactly does
+
+            all_preds[idx:idx + num_images, :, 0:2] = preds[:, :, 0:2].detach().cpu().numpy()
+            all_preds[idx:idx + num_images, :, 2:3] = maxvals.detach().cpu().numpy()
+            # double check this all_boxes parts
+            all_boxes[idx:idx + num_images, 0:2] = c[:, 0:2]
+            all_boxes[idx:idx + num_images, 2:4] = s[:, 0:2]
+            all_boxes[idx:idx + num_images, 4] = np.prod(s * pixel_std, 1)
+            all_boxes[idx:idx + num_images, 5] = score
+            image_paths.extend(joints_data['imgPath'])
+
+            idx += num_images
+
+            self.mean_loss_val += loss.item()
+            self.mean_acc_val += avg_acc.item()
+            if self.use_tensorboard:
+                self.summary_writer.add_scalar('Valid/Loss', loss.item(),
+                                               global_step=step + self.epoch * self.len_dl_val)
+                self.summary_writer.add_scalar('Valid/Accuracy', avg_acc.item(),
+                                               global_step=step + self.epoch * self.len_dl_val)
+                if step == 0:
+                    save_images(image, target, joints_target, output, joints_preds,
+                                joints_data['joints_visibility'], self.summary_writer,
+                                step=step + self.epoch * self.len_dl_train, prefix='test_')
 
         self.mean_loss_val /= len(self.dl_val)
         self.mean_acc_val /= len(self.dl_val)
 
         # COCO evaluation
-        print('\nVal AP/AR')
+        # print('\nVal AP/AR')
         self.val_accs, self.mean_mAP_val = self.ds_val.evaluate_overall_accuracy(
             all_preds, all_boxes, image_paths, output_dir=self.log_path)
+
+        mean_mAP = self.val_accs['AP']  # Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ]
+        AP_5 = self.val_accs['Ap .5']  # Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ]
+        AP_75 = self.val_accs['AP .75']  # Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ]
+        mean_mAR = self.val_accs[
+            'AR']  # Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.378
+        AR_5 = self.val_accs['AR .5']  # Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ]
+        AR_75 = self.val_accs['AR .75']  # Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ]
+
+        log = f'[EPOCH {self.epoch}] Valid Loss : {losses.avg:.4f}, '
+        log += f'Valid acc : {avg_accs.avg:.4f}, '
+        log += f'AP : {mean_mAP:.4f}, '
+        log += f'AP.5 : {AP_5:.4f}, '
+        log += f'AP.75 : {AP_75:.4f}, '
+        log += f'AR : {mean_mAR:.4f}, '
+        pbar.set_description(log)
+        pbar.close()
+
+        if self.use_tensorboard:
+            self.summary_writer.add_scalar('Valid/mean_mAP', mean_mAP,
+                                           global_step=step + self.epoch * self.len_dl_val)
+            self.summary_writer.add_scalar('Valid/AP.5', AP_5,
+                                           global_step=step + self.epoch * self.len_dl_val)
+            self.summary_writer.add_scalar('Valid/AP.75', AP_75,
+                                           global_step=step + self.epoch * self.len_dl_val)
+            self.summary_writer.add_scalar('Valid/mean_mAR', mean_mAR,
+                                           global_step=step + self.epoch * self.len_dl_val)
+            self.summary_writer.add_scalar('Valid/AR.5', AR_5,
+                                           global_step=step + self.epoch * self.len_dl_val)
+            self.summary_writer.add_scalar('Valid/AR.75', AR_75,
+                                           global_step=step + self.epoch * self.len_dl_val)

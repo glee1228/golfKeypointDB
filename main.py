@@ -60,7 +60,7 @@ def main(exp_name,
 
     print(device)
 
-    print("\nStarting experiment `%s` @ %s\n" % (exp_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    # print("\nStarting experiment `%s` @ %s\n" % (exp_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
     lr_decay = not disable_lr_decay
     use_tensorboard = not disable_tensorboard_log
@@ -68,7 +68,7 @@ def main(exp_name,
     image_resolution = ast.literal_eval(image_resolution)
     lr_decay_steps = ast.literal_eval(lr_decay_steps)
 
-    print("\nLoading train and validation datasets...")
+    # print("\nLoading train and validation datasets...")
 
     # load train and val datasets
     ds_train = GOLFDataset(
@@ -126,7 +126,7 @@ if __name__ == '__main__':
                         help="experiment name. A folder with this name will be created in the log_path.",
                         type=str, default=str(datetime.now().strftime("%Y%m%d_%H%M")))
     parser.add_argument("--epochs", "-e", help="number of epochs", type=int, default=200)
-    parser.add_argument("--batch_size", "-b", help="batch size", type=int, default=16)
+    parser.add_argument("--batch_size", "-b", help="batch size", type=int, default=32)
     parser.add_argument("--num_workers", "-w", help="number of DataLoader workers", type=int, default=4)
     parser.add_argument("--lr", "-l", help="initial learning rate", type=float, default=0.001)
     parser.add_argument("--disable_lr_decay", help="disable learning rate decay", action="store_true")
@@ -145,7 +145,7 @@ if __name__ == '__main__':
                              "the model, the optimizer, the epoch, and other parameters.",
                         type=str, default=None)
     parser.add_argument("--log_path", help="log path. tensorboard logs and checkpoints will be saved here.",
-                        type=str, default='./logs')
+                        type=str, default='/mldisk/nfs_shared_/dh/golf_ckpt')
     parser.add_argument("--disable_tensorboard_log", "-u", help="disable tensorboard logging", action="store_true")
     parser.add_argument("--model_c", help="HRNet c parameter", type=int, default=48)
     parser.add_argument("--model_nof_joints", help="HRNet nof_joints parameter", type=int, default=18)
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     parser.add_argument("--coco_bbox_path", help="path of detected bboxes to use during evaluation",
                         type=str, default=None)
     parser.add_argument("--seed", "-s", help="seed", type=int, default=1)
-    parser.add_argument("--device", "-d", help="device", type=str, default="cuda:0")
+    parser.add_argument("--device", "-d", help="device", type=str, default="cuda")
     args = parser.parse_args()
 
     main(**args.__dict__)
